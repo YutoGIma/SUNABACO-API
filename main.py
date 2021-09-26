@@ -85,33 +85,49 @@ def post_books(isbn:Isbn):
         None, book.title, book.authors, book.publishDate,
         book.description, book.stock, book.image, book.isbn
     )
+    select_isbn=()
+    select_isbn=book_value[7]
     # データベースへ接続
     connect = sqlite3.connect(DATABASE_URL)
     c = connect.cursor()
     # SQL文が長いので変数として作成
-    sql = 'INSERT INTO books(id,title,authors,publishDate,description,stock,image,isbn) VALUES(?,?,?,?,?,?,?,?)'
-    # SQL実行
-    c.execute(sql, book_value)
-    # 書き込み結果を保存
-    connect.commit()
-    # 上記でDBに保存したレコードを取得する
-    sql = 'SELECT * FROM books ORDER BY id DESC LIMIT 1'
-    c.execute(sql)
-    book_tuple = c.fetchone()
-    # DBから取得したレコードをBookモデルのインスタンスに置き換える
-    book = Book(
-        id=book_tuple[0],
-        title=book_tuple[1],
-        authors=book_tuple[2],
-        publishDate=book_tuple[3],
-        description=book_tuple[4],
-        stock=book_tuple[5],
-        image=book_tuple[6],
-        isbn=book_tuple[7],
-    )
-    # DB接続を切る
-    c.close()
-    connect.close()
+    c.execute("select id,stock from books where isbn = ?",(select_isbn,))
+    have_id=[]
+    have_id=c.fetchall()
+    if have_id[0]==None:
+        sql = 'INSERT INTO books(id,title,authors,publishDate,description,stock,image,isbn) VALUES(?,?,?,?,?,?,?,?)'
+        # SQL実行
+        c.execute(sql, book_value)
+        # 書き込み結果を保存
+        connect.commit()
+        # 上記でDBに保存したレコードを取得する
+        sql = 'SELECT * FROM books ORDER BY id DESC LIMIT 1'
+        c.execute(sql)
+        book_tuple = c.fetchone()
+        # DBから取得したレコードをBookモデルのインスタンスに置き換える
+        book = Book(
+            id=book_tuple[0],
+            title=book_tuple[1],
+            authors=book_tuple[2],
+            publishDate=book_tuple[3],
+            description=book_tuple[4],
+            stock=book_tuple[5],
+            image=book_tuple[6],
+            isbn=book_tuple[7],
+        )
+        # DB接続を切る
+        c.close()
+        connect.close()
+    else:
+        book_stock=have_id[0][1]+1
+        book_id=have_id[0][0]
+        c.execute('update books set stock=? where id=?',(book_stock,book_id))
+        # 書き込み結果を保存
+        connect.commit()
+        # DB接続を切る
+        c.close()
+        connect.close()
+    
     return dict(result=book)
 
 @app.put("/books")
@@ -142,14 +158,30 @@ def delete_book(book: Book):
     # データベースへ接続
     connect = sqlite3.connect(DATABASE_URL)
     c = connect.cursor()
-    # SQL文が長いので変数として作成
-    sql = 'DELETE from books WHERE id = ?'
-    # SQL実行
-    c.execute(sql, book_value)
-    # 書き込み結果を保存
-    connect.commit()
-    # DB接続を切る
-    c.close()
-    connect.close()
-    result = dict(detail='削除されました')
+    c.execute('select stock from books where id=?',book_value)
+    select_stock=c.fetchone()
+    select_stock=select_stock[0]
+    if select_stock ==1:
+        # SQL文が長いので変数として作成
+        sql = 'DELETE from books WHERE id = ?'
+        # SQL実行
+        c.execute(sql, book_value)
+        # 書き込み結果を保存
+        connect.commit()
+        # DB接続を切る
+        c.close()
+        connect.close()
+        result = dict(detail='削除されました')
+    else:
+        print(select_stock)
+        select_stock =select_stock - 1
+        print(select_stock)
+        c.execute('update books set stock=? where id=?',(select_stock,book_value[0]))
+        # 書き込み結果を保存
+        connect.commit()
+        # DB接続を切る
+        c.close()
+        connect.close()
+        result = dict(detail='在庫が一つ減りました。')
+
     return dict(result=result)
